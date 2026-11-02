@@ -1,0 +1,65 @@
+name: Build MyFileManager on GitHub
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Select newer installed Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.3.app
+          xcodebuild -version
+
+      - name: Extract audited project archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE="MyFileManager-iOS-Phase11-Audited.zip"
+          test -f "$ARCHIVE"
+          rm -rf extracted-project
+          mkdir extracted-project
+          unzip -q "$ARCHIVE" -d extracted-project
+          PROJECT_ROOT="$(find extracted-project -name project.yml -print -quit | xargs dirname)"
+          test -n "$PROJECT_ROOT"
+          cp -R "$PROJECT_ROOT"/. .
+          test -f project.yml
+          test -f Config/Info.plist
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build unsigned iOS Simulator app
+        run: >-
+          xcodebuild
+          -project MyFileManager.xcodeproj
+          -scheme MyFileManager
+          -sdk iphonesimulator
+          -configuration Debug
+          -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO
+          CODE_SIGNING_REQUIRED=NO
+          build
+
+      - name: Locate and package Simulator app
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find "$HOME/Library/Developer/Xcode/DerivedData" -path '*/Build/Products/Debug-iphonesimulator/MyFileManager.app' -print -quit)"
+          test -n "$APP_PATH"
+          mkdir -p artifacts
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" artifacts/MyFileManager-Simulator.zip
+
+      - name: Upload Simulator build
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyFileManager-Simulator
+          path: artifacts/MyFileManager-Simulator.zip
+          if-no-files-found: error
