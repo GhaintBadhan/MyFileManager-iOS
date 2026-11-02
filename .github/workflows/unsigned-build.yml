@@ -2,8 +2,6 @@ name: Build MyFileManager device IPA
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main, master ]
 
 jobs:
   device-build:
@@ -11,6 +9,11 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Select newer installed Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.3.app
+          xcodebuild -version
 
       - name: Extract audited project archive
         shell: bash
