@@ -1,4 +1,4 @@
-name: Build MyFileManager on GitHub
+name: Build MyFileManager device IPA
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
     branches: [ main, master ]
 
 jobs:
-  build:
+  device-build:
     runs-on: macos-15
     steps:
       - name: Check out repository
@@ -33,30 +33,38 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Build unsigned iOS Simulator app
-        run: >-
-          xcodebuild
-          -project MyFileManager.xcodeproj
-          -scheme MyFileManager
-          -sdk iphonesimulator
-          -configuration Debug
-          -destination 'generic/platform=iOS Simulator'
-          CODE_SIGNING_ALLOWED=NO
-          CODE_SIGNING_REQUIRED=NO
-          build
-
-      - name: Locate and package Simulator app
+      - name: Archive for physical iPhone without Apple signing
         shell: bash
         run: |
           set -euo pipefail
-          APP_PATH="$(find "$HOME/Library/Developer/Xcode/DerivedData" -path '*/Build/Products/Debug-iphonesimulator/MyFileManager.app' -print -quit)"
-          test -n "$APP_PATH"
-          mkdir -p artifacts
-          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" artifacts/MyFileManager-Simulator.zip
+          rm -rf build
+          xcodebuild archive \
+            -project MyFileManager.xcodeproj \
+            -scheme MyFileManager \
+            -sdk iphoneos \
+            -configuration Release \
+            -archivePath build/MyFileManager.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+          test -d build/MyFileManager.xcarchive/Products/Applications/MyFileManager.app
 
-      - name: Upload Simulator build
+      - name: Package unsigned IPA with Payload directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf ipa-payload
+          mkdir -p ipa-payload/Payload
+          cp -R build/MyFileManager.xcarchive/Products/Applications/MyFileManager.app ipa-payload/Payload/
+          mkdir -p artifacts
+          (cd ipa-payload && ditto -c -k --sequesterRsrc --keepParent Payload ../artifacts/MyFileManager-unsigned.ipa)
+          unzip -l artifacts/MyFileManager-unsigned.ipa | sed -n '1,30p'
+
+      - name: Upload unsigned device IPA and archive
         uses: actions/upload-artifact@v4
         with:
-          name: MyFileManager-Simulator
-          path: artifacts/MyFileManager-Simulator.zip
+          name: MyFileManager-iPhone-unsigned
+          path: |
+            artifacts/MyFileManager-unsigned.ipa
+            build/MyFileManager.xcarchive
           if-no-files-found: error
