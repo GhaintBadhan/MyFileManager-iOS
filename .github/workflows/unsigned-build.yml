@@ -60,14 +60,14 @@ jobs:
           mkdir -p ipa-payload/Payload
           cp -R build/MyFileManager.xcarchive/Products/Applications/MyFileManager.app ipa-payload/Payload/
           mkdir -p artifacts
-          (cd ipa-payload && ditto -c -k --sequesterRsrc --keepParent Payload ../artifacts/MyFileManager-unsigned.ipa)
+          (cd ipa-payload && /usr/bin/zip -qry ../artifacts/MyFileManager-unsigned.ipa Payload)
+          unzip -t artifacts/MyFileManager-unsigned.ipa
           unzip -l artifacts/MyFileManager-unsigned.ipa | sed -n '1,30p'
+          unzip -l artifacts/MyFileManager-unsigned.ipa | grep -q 'Payload/MyFileManager.app/Info.plist'
 
       - name: Upload unsigned device IPA and archive
         uses: actions/upload-artifact@v4
         with:
           name: MyFileManager-iPhone-unsigned
-          path: |
-            artifacts/MyFileManager-unsigned.ipa
-            build/MyFileManager.xcarchive
+          path: artifacts/MyFileManager-unsigned.ipa
           if-no-files-found: error
